@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escáner de Códigos de Barras</title>
+    <!-- Importamos la biblioteca de lectura de códigos desde un servidor en la nube (CDN) -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+        }
+        #reader {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background-color: #000;
+        }
+        .actions {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-excel { background-color: #217346; color: white; } /* Verde tipo Excel */
+        .btn-text { background-color: #007acc; color: white; }  /* Azul tipo editor */
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+    <h1>Escáner a Excel / Texto</h1>
+    
+    <!-- Aquí se renderizará el visor de la cámara -->
+    <div id="reader"></div>
+
+    <div class="actions">
+        <button class="btn-excel" onclick="exportarExcel()">Exportar a Excel (CSV)</button>
+        <button class="btn-text" onclick="exportarTexto()">Exportar a Texto (TXT)</button>
+    </div>
+
+    <!-- Tabla donde se muestran los códigos escaneados -->
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha / Hora</th>
+                <th>Código de Barras</th>
+            </tr>
+        </thead>
+        <tbody id="lista-codigos">
+            <!-- Los códigos escaneados aparecerán aquí dinámicamente -->
+        </tbody>
+    </table>
+
+    <script>
+        // Arreglo global para almacenar los objetos con los datos de los códigos
+        const codigosEscaneados = [];
+        let ultimoCodigo = "";
+        let tiempoUltimoEscaneo = 0;
+
+        // Función que se ejecuta de forma automática cuando el escáner detecta un código
+        function alDetectarCodigo(decodedText, decodedResult) {
+            const ahora = Date.now();
+            
+            // Evitamos que el mismo código se escanee repetidamente en menos de 3 segundos
+            if (decodedText === ultimoCodigo && (ahora - tiempoUltimoEscaneo) < 3000) {
+                return; 
+            }
+
+            ultimoCodigo = decodedText;
+            tiempoUltimoEscaneo = ahora;
+
+            const fechaActual = new Date().toLocaleString();
+            
+            // Guardamos el código y la hora en nuestro arreglo de datos
+            codigosEscaneados.push({ fecha: fechaActual, codigo: decodedText });
+
+            // Actualizamos la tabla visualmente en la pantalla
+            const tabla = document.getElementById("lista-codigos");
+            const fila = document.createElement("tr");
+            fila.innerHTML = `<td>${fechaActual}</td><td>${decodedText}</td>`;
+            tabla.appendChild(fila);
+
+            // Emitimos un pequeño pitido auditivo usando la API de audio del navegador
+            reproducirSonidoBeep();
+        }
+
+        // Genera un sonido rápido para confirmar la lectura del código
+        function reproducirSonidoBeep() {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // Frecuencia en Hz
+            oscillator.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1); // Duración de 0.1 segundos
+        }
+
+        // Configuración e inicio del escáner mediante la biblioteca html5QrCode
+        const html5QrCode = new Html5Qrcode("reader");
+        const config = { 
+            fps: 10, // Cuadros por segundo a procesar
+            qrbox: { width: 250, height: 150 } // Tamaño del cuadro de enfoque en pantalla
+        };
+
+        // Iniciamos la cámara solicitando explícitamente la cámara trasera ('environment')
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            config, 
+            alDetectarCodigo
+        ).catch(err => {
+            console.error("Error al iniciar la cámara: ", err);
+            alert("Asegúrate de dar permisos de cámara y usar HTTPS.");
+        });
+
+        // Lógica para exportar los datos recopilados a formato CSV (Compatible con Excel)
+        function exportarExcel() {
+            if (codigosEscaneados.length === 0) {
+                alert("No hay códigos escaneados para exportar.");
+                return;
+            }
+
+            // Creamos las cabeceras del archivo de Excel
+            let contenidoCsv = "Fecha y Hora,Codigo de Barras\n";
+            
+            // Recorremos los datos y los separamos por comas
+            codigosEscaneados.forEach(item => {
+                contenidoCsv += `"${item.fecha}","${item.codigo}"\n`;
+            });
+
+            // Forzamos la codificación UTF-8 para que Excel reconozca tildes y caracteres especiales
+            const blob = new Blob(["\ufeff" + contenidoCsv], { type: 'text/csv;charset=utf-8;' });
+            descargarArchivo(blob, "codigos_barras.csv");
+        }
+
+        // Lógica para exportar los datos recopilados a un archivo de texto plano
+        function exportarTexto() {
+            if (codigosEscaneados.length === 0) {
+                alert("No hay códigos escaneados para exportar.");
+                return;
+            }
+
+            let contenidoTxt = "REGISTRO DE CÓDIGOS DE BARRAS\n=============================\n";
+            codigosEscaneados.forEach(item => {
+                contenidoTxt += `[${item.fecha}] Escaneado: ${item.codigo}\n`;
+            });
+
+            const blob = new Blob([contenidoTxt], { type: 'text/plain;charset=utf-8;' });
+            descargarArchivo(blob, "codigos_barras.txt");
+        }
+
+        // Función auxiliar para simular un clic y descargar el archivo generado en el dispositivo
+        function descargarArchivo(blob, nombreArchivo) {
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", nombreArchivo);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
