@@ -125,7 +125,7 @@
             oscillator.start();
             oscillator.stop(audioCtx.currentTime + 0.1); // Duración de 0.1 segundos
         }
-
+/*
         // Configuración e inicio del escáner mediante la biblioteca html5QrCode
         const html5QrCode = new Html5Qrcode("reader");
         const config = { 
@@ -142,7 +142,37 @@
             console.error("Error al iniciar la cámara: ", err);
             alert("Asegúrate de dar permisos de cámara y usar HTTPS.");
         });
+*/
 
+        // 1. Definimos explícitamente qué formatos queremos que lea el motor.
+        // Importamos el enumerador de formatos de la biblioteca.
+        const formatosSoportados = [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13
+        ];
+        
+        // 2. Configuramos el objeto agregando la propiedad 'formatsToSupport'
+        const config = { 
+            fps: 15, // Incrementamos de 10 a 15 para mayor precisión de captura
+            qrbox: { width: 320, height: 120 }, // Hacemos la caja más ancha y delgada, ideal para líneas largas
+            formatsToSupport: formatosSoportados // Forzamos a la app a concentrarse en estos códigos
+        };
+        
+        // Instanciamos el escáner de la misma forma
+        const html5QrCode = new Html5Qrcode("reader");
+        
+        // 3. Iniciamos la cámara con la nueva configuración optimizada
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            config, 
+            alDetectarCodigo
+        ).catch(err => {
+            console.error("Error al iniciar la cámara: ", err);
+            alert("Error de cámara. Asegúrate de usar HTTPS y dar permisos.");
+        });
+
+        
         // Lógica para exportar los datos recopilados a formato CSV (Compatible con Excel)
         function exportarExcel() {
             if (codigosEscaneados.length === 0) {
